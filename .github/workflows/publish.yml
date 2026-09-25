@@ -1,0 +1,45 @@
+name: Publish to Threads
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "queue/**.txt"
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Publish new queue files
+        env:
+          THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
+          THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
+        run: |
+          set -e
+          for f in $(git diff --name-only --diff-filter=A HEAD~1 HEAD -- 'queue/*.txt' || true); do
+            echo "발행 중: $f"
+            python scripts/publish_threads.py "$f"
+            mkdir -p queue/published
+            git mv "$f" "queue/published/$(basename "$f")"
+          done
+
+      - name: Commit published state
+        run: |
+          git config user.name "f45-boramae-threads-bot"
+          git config user.email "actions@users.noreply.github.com"
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: mark queued posts as published [skip ci]"
+            git push
+          fi
