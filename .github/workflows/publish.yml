@@ -24,17 +24,13 @@ jobs:
         with:
           fetch-depth: 2
 
-      - name: 새 게시물 내용 미리보기 + 승인/거절 알림
-        env:
-          APPROVAL_PAT: ${{ secrets.APPROVAL_PAT }}
+      - name: 새 게시물 내용 미리보기 알림
         run: |
           files=$(git diff --name-only --diff-filter=A HEAD~1 HEAD -- 'queue/*.txt' 2>/dev/null || true)
           if [ -z "$files" ]; then
             files=$(ls queue/*.txt 2>/dev/null || true)
           fi
           run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          deploy_api="https://api.github.com/repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/pending_deployments"
-          env_id="22759192435"
 
           {
             echo "## 📝 승인 대기 중인 게시물"
@@ -51,35 +47,13 @@ jobs:
               echo ""
             } >> "$GITHUB_STEP_SUMMARY"
 
-            approve_body=$(jq -n --argjson id "$env_id" '{environment_ids:[$id], state:"approved", comment:"폰에서 승인"}' | jq -c .)
-            reject_body=$(jq -n --argjson id "$env_id" '{environment_ids:[$id], state:"rejected", comment:"폰에서 거절"}' | jq -c .)
-
-            payload=$(jq -n \
-              --arg topic "f45-boramae-threads-bot-9f3c21" \
-              --arg title "F45 보라매 새 게시물 승인 요청" \
-              --arg message "$content" \
-              --arg url "$deploy_api" \
-              --arg auth "Bearer ${APPROVAL_PAT}" \
-              --arg approve_body "$approve_body" \
-              --arg reject_body "$reject_body" \
-              --arg view_url "$run_url" \
-              '{
-                topic: $topic,
-                title: $title,
-                message: $message,
-                tags: ["memo"],
-                actions: [
-                  {action:"http", label:"예", url:$url, method:"POST",
-                   headers:{Authorization:$auth, Accept:"application/vnd.github+json", "Content-Type":"application/json"},
-                   body:$approve_body, clear:true},
-                  {action:"http", label:"아니오", url:$url, method:"POST",
-                   headers:{Authorization:$auth, Accept:"application/vnd.github+json", "Content-Type":"application/json"},
-                   body:$reject_body, clear:true},
-                  {action:"view", label:"자세히 보기", url:$view_url}
-                ]
-              }')
-
-            curl -s -X POST https://ntfy.sh/ -H "Content-Type: application/json" -d "$payload" || true
+            # ntfy 앱이 있는 경우 보너스 알림 (없어도 이메일 승인 요청은 정상 작동)
+            curl -s \
+              -H "Title: F45 보라매 새 게시물 승인 요청" \
+              -H "Tags: memo" \
+              -H "Actions: view, 승인하러 가기, ${run_url}, clear=true" \
+              -d "$content" \
+              https://ntfy.sh/f45-boramae-threads-bot-9f3c21 || true
           done
 
   publish:
