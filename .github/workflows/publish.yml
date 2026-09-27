@@ -15,7 +15,34 @@ permissions:
   contents: write
 
 jobs:
+  notify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 코드 가져오기
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: 새 게시물 내용 미리보기 알림 (ntfy)
+        run: |
+          files=$(git diff --name-only --diff-filter=A HEAD~1 HEAD -- 'queue/*.txt' 2>/dev/null || true)
+          if [ -z "$files" ]; then
+            files=$(ls queue/*.txt 2>/dev/null || true)
+          fi
+          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          for f in $files; do
+            content=$(cat "$f")
+            curl -s \
+              -H "Title: F45 보라매 새 게시물 승인 요청" \
+              -H "Tags: memo" \
+              -H "Actions: view, 승인하러 가기, ${run_url}, clear=true" \
+              -d "$content" \
+              https://ntfy.sh/f45-boramae-threads-bot-9f3c21 || true
+          done
+
   publish:
+    needs: notify
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: threads-publish
