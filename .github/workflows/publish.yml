@@ -24,15 +24,30 @@ jobs:
         with:
           fetch-depth: 2
 
-      - name: 새 게시물 내용 미리보기 알림 (ntfy)
+      - name: 새 게시물 내용 미리보기
         run: |
           files=$(git diff --name-only --diff-filter=A HEAD~1 HEAD -- 'queue/*.txt' 2>/dev/null || true)
           if [ -z "$files" ]; then
             files=$(ls queue/*.txt 2>/dev/null || true)
           fi
           run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+          {
+            echo "## 📝 승인 대기 중인 게시물"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+
           for f in $files; do
             content=$(cat "$f")
+
+            {
+              echo '```'
+              echo "$content"
+              echo '```'
+              echo ""
+            } >> "$GITHUB_STEP_SUMMARY"
+
+            # ntfy 앱이 있는 경우 보너스 알림 (없어도 이메일 승인 요청은 정상 작동)
             curl -s \
               -H "Title: F45 보라매 새 게시물 승인 요청" \
               -H "Tags: memo" \
