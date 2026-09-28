@@ -15,52 +15,9 @@ permissions:
   contents: write
 
 jobs:
-  notify:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: 코드 가져오기
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 2
-
-      - name: 새 게시물 내용 미리보기 알림
-        run: |
-          files=$(git diff --name-only --diff-filter=A HEAD~1 HEAD -- 'queue/*.txt' 2>/dev/null || true)
-          if [ -z "$files" ]; then
-            files=$(ls queue/*.txt 2>/dev/null || true)
-          fi
-          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-
-          {
-            echo "## 📝 승인 대기 중인 게시물"
-            echo ""
-          } >> "$GITHUB_STEP_SUMMARY"
-
-          for f in $files; do
-            content=$(cat "$f")
-
-            {
-              echo '```'
-              echo "$content"
-              echo '```'
-              echo ""
-            } >> "$GITHUB_STEP_SUMMARY"
-
-            # ntfy 앱이 있는 경우 보너스 알림 (없어도 이메일 승인 요청은 정상 작동)
-            curl -s \
-              -H "Title: F45 보라매 새 게시물 승인 요청" \
-              -H "Tags: memo" \
-              -H "Actions: view, 승인하러 가기, ${run_url}, clear=true" \
-              -d "$content" \
-              https://ntfy.sh/f45-boramae-threads-bot-9f3c21 || true
-          done
-
   publish:
-    needs: notify
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    environment: threads-publish
     steps:
       - name: 코드 가져오기
         uses: actions/checkout@v4
@@ -87,8 +44,20 @@ jobs:
           if [ -z "$files" ]; then
             files=$(ls queue/*.txt 2>/dev/null || true)
           fi
+
+          {
+            echo "## 📝 발행된 게시물"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+
           for f in $files; do
             echo "발행 중: $f"
+            {
+              echo '```'
+              cat "$f"
+              echo '```'
+              echo ""
+            } >> "$GITHUB_STEP_SUMMARY"
             python scripts/publish_threads.py "$f"
             mkdir -p queue/published
             git mv "$f" "queue/published/$(basename "$f")"
@@ -112,8 +81,8 @@ jobs:
         if: always()
         run: |
           if [ "${{ steps.publish.outcome }}" = "success" ]; then
-            curl -s -H "Title: F45 보라매 Threads 발행 성공" -H "Tags: white_check_mark" \
-              -d "새 게시물이 Threads에 발행됐습니다" \
+            curl -s -H "Title: F45 보라매 Threads 발행 완료" -H "Tags: white_check_mark" \
+              -d "새 게시물이 Threads에 올라갔습니다. 마음에 안 들면 Threads 앱에서 직접 삭제하세요." \
               https://ntfy.sh/f45-boramae-threads-bot-9f3c21 || true
           else
             curl -s -H "Title: F45 보라매 Threads 발행 실패" -H "Priority: high" -H "Tags: x" \
